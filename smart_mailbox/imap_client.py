@@ -1,8 +1,10 @@
-"""Accès IMAP en lecture seule pour l'instant.
+"""Accès IMAP : lecture et déplacement des messages.
 
 Règle absolue du projet : aucun message n'est jamais supprimé.
-Ce module n'utilise ni le drapeau \\Deleted ni EXPUNGE, et lit les
-messages avec BODY.PEEK pour ne pas les marquer comme lus.
+Un message n'est retiré de la boîte de réception qu'après avoir été copié
+avec succès dans son dossier de destination, et seulement par UID MOVE ou
+UID EXPUNGE ciblé sur ce seul message. Les messages sont lus avec BODY.PEEK
+pour ne pas les marquer comme lus.
 """
 import email
 import imaplib
@@ -17,9 +19,28 @@ class MessageSummary:
     sender: str
     subject: str
     date: str
+    body: str = ""
 
 
 _LIST_NAME = re.compile(r'(?:"((?:[^"\\]|\\.)*)"|(\S+))\s*$')
+
+
+_BODY_CHARS = 1500
+_TAGS = re.compile(r"<[^>]+>")
+_SPACES = re.compile(r"\s+")
+
+
+def _body_preview(msg) -> str:
+    """Début du texte du message, sans pièces jointes ni balises HTML."""
+    part = None
+    try:
+        part = msg.get_body(preferencelist=("plain", "html"))
+        text = part.get_content() if part else ""
+    except (KeyError, LookupError, ValueError, AttributeError):
+        text = ""
+    if part is not None and part.get_content_subtype() == "html":
+        text = _TAGS.sub(" ", text)
+    return _SPACES.sub(" ", text).strip()[:_BODY_CHARS]
 
 
 def _quote(name: str) -> str:
@@ -30,6 +51,9 @@ class MailboxClient:
     def __init__(self, host: str, port: int, user: str, password: str):
         self.conn = imaplib.IMAP4_SSL(host, port)
         self.conn.login(user, password)
+        # Les capacités peuvent changer après authentification : on les relit.
+        typ, data = self.conn.capability()
+        self.capabilities = set(data[0].decode().upper().split()) if data and data[0] else set()
 
     def close(self) -> None:
         try:
@@ -64,16 +88,18 @@ class MailboxClient:
             self.conn.subscribe(_quote(name))
         return True
 
-    def inbox_messages(self, limit: int) -> list[MessageSummary]:
-        """Résumés des messages de la boîte de réception, les plus récents d'abord."""
-        self.conn.select("INBOX", readonly=True)
+    def inbox_messages(self, limit: int, readonly: bool = True) -> list[MessageSummary]:
+        """Résumés des messages de la boîte de réception, les plus récents d'abord.
+
+        Le dossier reste sélectionné ensuite ; il faut readonly=False pour déplacer.
+        """
+        self.conn.select("INBOX", readonly=readonly)
         typ, data = self.conn.uid("SEARCH", None, "ALL")
         uids = data[0].split()[-limit:][::-1] if data and data[0] else []
         result = []
         for uid in uids:
-            typ, parts = self.conn.uid(
-                "FETCH", uid, "(BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE)])"
-            )
+            # Les 64 premiers Ko suffisent pour l'en-tête et le début du texte.
+            typ, parts = self.conn.uid("FETCH", uid, "(BODY.PEEK[]<0.65536>)")
             raw = next((p[1] for p in parts if isinstance(p, tuple)), b"")
             msg = email.message_from_bytes(raw, policy=default_policy)
             result.append(MessageSummary(
@@ -81,5 +107,28 @@ class MailboxClient:
                 sender=str(msg.get("From", "")),
                 subject=str(msg.get("Subject", "")),
                 date=str(msg.get("Date", "")),
+                body=_body_preview(msg),
             ))
         return result
+
+    def move(self, uid: str, folder: str) -> bool:
+        """Déplace un message de la boîte de réception vers folder.
+
+        Renvoie False si le message n'a été que copié (serveur sans MOVE ni
+        UIDPLUS) : il reste alors dans la boîte de réception, rien n'est perdu.
+        """
+        caps = self.capabilities
+        if "MOVE" in caps:
+            typ, data = self.conn.uid("MOVE", uid, _quote(folder))
+            if typ != "OK":
+                raise RuntimeError(f"Déplacement de {uid} impossible : {data}")
+            return True
+        typ, data = self.conn.uid("COPY", uid, _quote(folder))
+        if typ != "OK":
+            raise RuntimeError(f"Copie de {uid} impossible : {data}")
+        if "UIDPLUS" not in caps:
+            # Un EXPUNGE global effacerait aussi d'autres messages : on s'abstient.
+            return False
+        self.conn.uid("STORE", uid, "+FLAGS.SILENT", r"(\Deleted)")
+        self.conn.uid("EXPUNGE", uid)
+        return True

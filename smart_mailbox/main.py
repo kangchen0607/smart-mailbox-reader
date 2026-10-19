@@ -4,6 +4,8 @@ Par défaut le script tourne en mode essai : il ne modifie rien sur le serveur.
 """
 import argparse
 
+from . import move_log
+from .classifier import IMPORTANT, Classifier
 from .config import load_config
 from .imap_client import MailboxClient
 
@@ -25,10 +27,38 @@ def main() -> None:
             else:
                 print(f"Dossier {folder!r} déjà présent")
 
-        messages = client.inbox_messages(cfg.max_messages)
-        print(f"\n{len(messages)} message(s) lus dans la boîte de réception :")
+        if not cfg.criteria:
+            print("Aucun fichier de critères trouvé : règles générales seulement.")
+        classifier = Classifier(cfg.anthropic_api_key, cfg.model, cfg.criteria)
+
+        messages = client.inbox_messages(cfg.max_messages, readonly=dry_run)
+        print(f"\n{len(messages)} message(s) à trier dans la boîte de réception :")
+        counts = {cfg.folder_important: 0, cfg.folder_less_important: 0, "erreur": 0}
         for m in messages:
-            print(f"  [{m.uid}] {m.date[:16]} | {m.sender[:40]} | {m.subject[:60]}")
+            label = f"[{m.uid}] {m.sender[:30]} | {m.subject[:50]}"
+            try:
+                c = classifier.classify(m.sender, m.subject, m.body)
+            except Exception as e:  # le mail reste simplement dans la boîte de réception
+                counts["erreur"] += 1
+                print(f"  ?  {label}\n     classement impossible, laissé en place : {e}")
+                continue
+            folder = cfg.folder_important if c.category == IMPORTANT else cfg.folder_less_important
+            counts[folder] += 1
+            print(f"  -> {folder:<16} {label}\n     {c.reason}")
+            if dry_run:
+                continue
+            try:
+                status = "déplacé" if client.move(m.uid, folder) else "copié (laissé en boîte de réception)"
+            except Exception as e:
+                status = f"échec : {e}"
+                print(f"     {status}")
+            move_log.append(cfg.move_log, m.uid, m.sender, m.subject, folder, c.reason, status)
+
+        print("\nBilan : " + ", ".join(f"{k} : {v}" for k, v in counts.items()))
+        if dry_run:
+            print("Mode essai : aucun mail déplacé. Relancer avec --apply pour trier.")
+        else:
+            print(f"Journal des déplacements : {cfg.move_log}")
 
 
 if __name__ == "__main__":

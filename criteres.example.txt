@@ -1,0 +1,11 @@
+# Mes critères de tri (copier ce fichier en criteres.txt et l'adapter).
+# Écrire en langage courant, une règle par ligne. Les lignes en # sont ignorées.
+
+Important :
+- Les mails de ma famille et de mes amis.
+- Tout ce qui vient de ma banque, des impôts, de la CAF, de l'Assurance maladie ou de mon assurance.
+- Les factures, échéances et rendez-vous.
+
+Moins important :
+- Les newsletters, promotions et offres commerciales.
+- Les notifications des réseaux sociaux.

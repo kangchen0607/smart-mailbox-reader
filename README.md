@@ -5,11 +5,13 @@ entre deux dossiers : **Important** et **Moins important**.
 
 > Règle absolue : aucun message n'est jamais supprimé, ils sont seulement déplacés.
 
-## État actuel (étape 1)
+## État actuel (étape 2)
 
-Connexion IMAP, création des deux dossiers s'ils manquent, et lecture des
-derniers messages de la boîte de réception (sans les marquer comme lus).
-Le tri par IA et le déplacement arrivent aux étapes suivantes.
+Connexion IMAP, création des deux dossiers s'ils manquent, puis tri des
+derniers messages de la boîte de réception par l'IA (Claude Haiku) selon vos
+critères personnels. Avec `--apply`, chaque mail est déplacé dans son dossier
+et noté dans le journal `deplacements.csv` (ouvrable dans Excel).
+En cas de doute ou d'erreur, le mail reste dans la boîte de réception.
 
 ## Installation sous Windows 11
 
@@ -21,14 +23,19 @@ Le tri par IA et le déplacement arrivent aux étapes suivantes.
    pip install -r requirements.txt
    copy .env.example .env
    ```
-3. Ouvrir `.env` et renseigner `IMAP_USER` et `IMAP_PASSWORD`.
+3. Ouvrir `.env` et renseigner `IMAP_USER`, `IMAP_PASSWORD` et `ANTHROPIC_API_KEY`.
    Chez Free, l'IMAP doit être activé dans l'espace abonné (Paramètres de la messagerie).
+4. Copier `criteres.example.txt` en `criteres.txt` et y décrire, en langage courant,
+   ce qui est important pour vous (`copy criteres.example.txt criteres.txt`).
 
 ## Utilisation
 
 Depuis le dossier du dépôt (là où se trouve `run.py`), environnement activé :
 
 ```powershell
-py run.py          # mode essai : n'écrit rien sur le serveur
-py run.py --apply  # crée réellement les dossiers manquants
+py run.py          # mode essai : affiche le tri proposé, ne déplace rien
+py run.py --apply  # crée les dossiers et déplace réellement les mails
 ```
+
+Le mode essai appelle quand même l'IA (quelques centimes pour 50 mails avec Haiku) :
+c'est l'occasion d'ajuster `criteres.txt` avant le premier vrai tri.
