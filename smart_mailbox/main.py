@@ -1,4 +1,4 @@
-"""Point d'entrée : python -m smart_mailbox.main [--apply]
+"""Point d'entrée : py run.py [--apply]
 
 Par défaut le script tourne en mode essai : il ne modifie rien sur le serveur.
 """

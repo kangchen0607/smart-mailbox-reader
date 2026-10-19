@@ -26,7 +26,9 @@ Le tri par IA et le déplacement arrivent aux étapes suivantes.
 
 ## Utilisation
 
+Depuis le dossier du dépôt (là où se trouve `run.py`), environnement activé :
+
 ```powershell
-py -m smart_mailbox.main          # mode essai : n'écrit rien sur le serveur
-py -m smart_mailbox.main --apply  # crée réellement les dossiers manquants
+py run.py          # mode essai : n'écrit rien sur le serveur
+py run.py --apply  # crée réellement les dossiers manquants
 ```
