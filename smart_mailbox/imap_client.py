@@ -9,8 +9,10 @@ pour ne pas les marquer comme lus.
 import email
 import imaplib
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from email.policy import default as default_policy
+
+from . import security
 
 
 @dataclass
@@ -20,6 +22,8 @@ class MessageSummary:
     subject: str
     date: str
     body: str = ""
+    signals: list[str] = field(default_factory=list)
+    surely_suspect: bool = False
 
 
 _LIST_NAME = re.compile(r'(?:"((?:[^"\\]|\\.)*)"|(\S+))\s*$')
@@ -102,12 +106,15 @@ class MailboxClient:
             typ, parts = self.conn.uid("FETCH", uid, "(BODY.PEEK[]<0.65536>)")
             raw = next((p[1] for p in parts if isinstance(p, tuple)), b"")
             msg = email.message_from_bytes(raw, policy=default_policy)
+            signals, certain = security.analyze(msg)
             result.append(MessageSummary(
                 uid=uid.decode(),
                 sender=str(msg.get("From", "")),
                 subject=str(msg.get("Subject", "")),
                 date=str(msg.get("Date", "")),
                 body=_body_preview(msg),
+                signals=signals,
+                surely_suspect=certain,
             ))
         return result
 
