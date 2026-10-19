@@ -1,7 +1,7 @@
 # smart-mailbox-reader
 
 Agent qui se connecte chaque jour à une boîte IMAP (Free) et range les mails
-entre deux dossiers : **Important** et **Moins important**.
+entre trois dossiers : **Messages suspects**, **Important** et **Moins important**.
 
 > Règle absolue : aucun message n'est jamais supprimé, ils sont seulement déplacés.
 
@@ -13,6 +13,18 @@ critères personnels. Avec `--apply`, chaque mail est déplacé dans son dossier
 et noté dans le journal `deplacements.csv` (ouvrable dans Excel).
 En cas de doute ou d'erreur, le mail reste dans la boîte de réception.
 Le tri peut tourner automatiquement une fois par jour via le Planificateur de tâches.
+
+## Messages suspects (première passe)
+
+Avant le tri important / moins important, chaque mail passe un contrôle de sécurité.
+Il part dans **Messages suspects** si :
+- l'authentification du domaine expéditeur échoue (DMARC, ou SPF et DKIM) : décidé sans l'IA ;
+- ou l'IA le juge frauduleux (hameçonnage, usurpation), aidée des indices relevés dans
+  les en-têtes : adresse de réponse vers un autre domaine, fausse adresse dans le nom affiché,
+  domaine imitant une marque (paypal-securite.com, impots-…), domaine en caractères internationaux.
+
+Les mails suspects ne sont ni supprimés ni ouverts : vérifiez le dossier de temps en temps,
+un mail légitime peut s'y retrouver (et se replace à la main).
 
 ## Installation sous Windows 11
 

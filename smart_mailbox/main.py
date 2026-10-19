@@ -5,7 +5,7 @@ Par défaut le script tourne en mode essai : il ne modifie rien sur le serveur.
 import argparse
 
 from . import move_log
-from .classifier import IMPORTANT, Classifier
+from .classifier import IMPORTANT, SUSPECT, Classification, Classifier
 from .config import load_config
 from .imap_client import MailboxClient
 
@@ -21,7 +21,7 @@ def main() -> None:
     print(f"Connexion à {cfg.host} en tant que {cfg.user}"
           f"{' (mode essai, rien ne sera modifié)' if dry_run else ''}")
     with MailboxClient(cfg.host, cfg.port, cfg.user, cfg.password) as client:
-        for folder in (cfg.folder_important, cfg.folder_less_important):
+        for folder in (cfg.folder_suspect, cfg.folder_important, cfg.folder_less_important):
             if client.ensure_folder(folder, dry_run):
                 print(f"Dossier {folder!r} {'à créer' if dry_run else 'créé'}")
             else:
@@ -33,18 +33,23 @@ def main() -> None:
 
         messages = client.inbox_messages(cfg.max_messages, readonly=dry_run)
         print(f"\n{len(messages)} message(s) à trier dans la boîte de réception :")
-        counts = {cfg.folder_important: 0, cfg.folder_less_important: 0, "erreur": 0}
+        counts = {cfg.folder_suspect: 0, cfg.folder_important: 0,
+                  cfg.folder_less_important: 0, "erreur": 0}
+        folders = {SUSPECT: cfg.folder_suspect, IMPORTANT: cfg.folder_important}
         for m in messages:
             label = f"[{m.uid}] {m.sender[:30]} | {m.subject[:50]}"
             try:
-                c = classifier.classify(m.sender, m.subject, m.body)
+                if m.surely_suspect:  # première passe : pas besoin de l'IA
+                    c = Classification(SUSPECT, "; ".join(m.signals))
+                else:
+                    c = classifier.classify(m.sender, m.subject, m.body, m.signals)
             except Exception as e:  # le mail reste simplement dans la boîte de réception
                 counts["erreur"] += 1
                 print(f"  ?  {label}\n     classement impossible, laissé en place : {e}")
                 continue
-            folder = cfg.folder_important if c.category == IMPORTANT else cfg.folder_less_important
+            folder = folders.get(c.category, cfg.folder_less_important)
             counts[folder] += 1
-            print(f"  -> {folder:<16} {label}\n     {c.reason}")
+            print(f"  -> {folder:<17} {label}\n     {c.reason}")
             if dry_run:
                 continue
             try:

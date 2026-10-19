@@ -14,6 +14,7 @@ class Config:
     password: str
     folder_important: str
     folder_less_important: str
+    folder_suspect: str
     max_messages: int
     anthropic_api_key: str
     model: str
@@ -42,6 +43,7 @@ def load_config() -> Config:
         password=os.environ["IMAP_PASSWORD"],
         folder_important=os.getenv("FOLDER_IMPORTANT", "Important"),
         folder_less_important=os.getenv("FOLDER_LESS_IMPORTANT", "Moins important"),
+        folder_suspect=os.getenv("FOLDER_SUSPECT", "Messages suspects"),
         max_messages=int(os.getenv("MAX_MESSAGES", "50")),
         anthropic_api_key=os.environ["ANTHROPIC_API_KEY"],
         model=os.getenv("ANTHROPIC_MODEL", "claude-haiku-5-5"),
